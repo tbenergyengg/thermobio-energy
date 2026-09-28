@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TST-1025-HB Turbine Diagnostic System</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">TB</div>
+    <div><strong>Turbine Diagnostic</strong><span>TST-1025-HB • ESE Energy</span></div>
+  </div>
+  <div class="top-actions"><span id="masterStatus" class="pill gray">Master data not saved</span></div>
+</header>
+
+<div class="layout">
+<aside class="sidebar">
+  <button class="nav active" data-section="dashboard">▣ Dashboard</button>
+  <button class="nav" data-section="master">⚙ Turbine Master Data</button>
+  <button class="nav" data-section="inspection">✚ New Inspection</button>
+  <button class="nav" data-section="history">▤ Inspection History</button>
+  <div class="side-note">Rule-based diagnostic<br><small>Based on supplied turbine documents</small></div>
+</aside>
+
+<main>
+<section id="dashboard" class="section active">
+  <div class="hero">
+    <div>
+      <div class="eyebrow">TURBINE HEALTH MONITORING</div>
+      <h1>TST-1025-HB Diagnostic Center</h1>
+      <p>Enter operating parameters and get an instant Normal / Alarm / Trip assessment.</p>
+    </div>
+    <button class="primary" onclick="showSection('inspection')">＋ New Inspection</button>
+  </div>
+
+  <div class="cards">
+    <div class="stat"><span>Master Data</span><b id="dashMaster">Not saved</b></div>
+    <div class="stat"><span>Last Result</span><b id="dashResult">—</b></div>
+    <div class="stat"><span>Saved Inspections</span><b id="dashCount">0</b></div>
+    <div class="stat"><span>System</span><b>V1 Rule Engine</b></div>
+  </div>
+
+  <div class="panel">
+    <h2>System workflow</h2>
+    <div class="flow">
+      <span>Input</span><i>→</i><span>Limit Check</span><i>→</i>
+      <span>Diagnosis</span><i>→</i><span>Report / History</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Important</h2>
+    <p class="muted">
+      Alarm/trip limits are applied only where documented in the supplied
+      Instrument Setting Chart. Performance indicators are shown as
+      engineering/trending information and are not treated as trip limits.
+    </p>
+  </div>
+</section>
+
+<section id="master" class="section">
+  <div class="page-head">
+    <div>
+      <h1>Turbine Master Data</h1>
+      <p>Fill once. Save once. Reused for every inspection.</p>
+    </div>
+  </div>
+
+  <form id="masterForm" class="panel formgrid"></form>
+
+  <div class="actions">
+    <button class="primary" id="saveMaster">Save Master Data</button>
+    <button class="secondary" id="exportMaster">Export Master Data</button>
+    <label class="filebtn secondary">
+      Import Master Data
+      <input id="importMaster" type="file" accept=".json">
+    </label>
+  </div>
+</section>
+
+<section id="inspection" class="section">
+  <div class="page-head">
+    <div>
+      <h1>New Inspection</h1>
+      <p>Enter current turbine operating values.</p>
+    </div>
+    <div id="inspectionStatus" class="status big neutral">READY</div>
+  </div>
+
+  <form id="inspectionForm">
+    <div id="inspectionGroups"></div>
+
+    <div class="panel">
+      <h2>Operator Observations</h2>
+      <div class="formgrid">
+        <label>Active Alarm / Trip
+          <input id="alarmTrip" type="text">
+        </label>
+
+        <label>Abnormal Sound / Noise
+          <input id="noise" type="text">
+        </label>
+
+        <label class="wide">Operator Remarks
+          <textarea id="remarks" rows="3"></textarea>
+        </label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" type="submit">Check Diagnostic</button>
+      <button class="secondary" type="button" id="clearInspection">Clear</button>
+    </div>
+  </form>
+
+  <div id="result"></div>
+</section>
+
+<section id="history" class="section">
+  <div class="page-head">
+    <div>
+      <h1>Inspection History</h1>
+      <p>Saved locally in this browser.</p>
+    </div>
+    <button class="secondary" id="exportCSV">Export CSV</button>
+  </div>
+
+  <div class="panel tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date/Time</th>
+          <th>Status</th>
+          <th>Load</th>
+          <th>Steam Flow</th>
+          <th>Inlet P</th>
+          <th>Inlet T</th>
+          <th>Vibration</th>
+          <th>Remarks</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+</section>
+</main>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
