@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PowerSys - Single Line Diagram Editor</title>
+<style>
+:root{
+  --bg:#f4f6f8; --panel:#ffffff; --line:#c7ccd1; --text:#1a2027; --muted:#5b6570;
+  --accent:#2563eb; --accent2:#dc2626; --busfill:#1a2027; --grid:#e2e6ea;
+  --toolbtn:#eef1f4; --toolbtn-active:#2563eb; --toolbtn-active-text:#fff;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12161b; --panel:#1a1f26; --line:#3a4048; --text:#e6e9ec; --muted:#9aa4ae;
+    --accent:#3b82f6; --accent2:#f87171; --busfill:#e6e9ec; --grid:#232a32; --toolbtn:#232a32;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12161b; --panel:#1a1f26; --line:#3a4048; --text:#e6e9ec; --muted:#9aa4ae;
+  --accent:#3b82f6; --accent2:#f87171; --busfill:#e6e9ec; --grid:#232a32; --toolbtn:#232a32;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  display:flex;flex-direction:column;overflow:hidden}
+header{padding:10px 14px env(safe-area-inset-top,0px);padding-top:calc(10px + env(safe-area-inset-top,0px));
+  background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+h1{font-size:15px;margin:0 10px 0 0;font-weight:600;white-space:nowrap}
+button{font:inherit;font-size:12.5px;padding:7px 11px;border-radius:7px;border:1px solid var(--line);
+  background:var(--toolbtn);color:var(--text);cursor:pointer;white-space:nowrap}
+button.active{background:var(--toolbtn-active);color:var(--toolbtn-active-text);border-color:var(--toolbtn-active)}
+button:hover{filter:brightness(1.05)}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+main{flex:1;display:flex;min-height:0}
+#canvasWrap{flex:1;overflow:auto;position:relative;background:
+  linear-gradient(var(--grid) 1px, transparent 1px) 0 0/20px 20px,
+  linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/20px 20px, var(--bg)}
+svg{display:block;cursor:crosshair}
+.bus{cursor:pointer}
+.bus rect{fill:var(--busfill);stroke:var(--text);stroke-width:1}
+.bus text{fill:var(--text);font-size:11px;font-weight:600}
+.bus .sub{fill:var(--muted);font-size:9px;font-weight:400}
+.branch{stroke:var(--accent);stroke-width:2.4;fill:none;cursor:pointer}
+.branch.selected,.bus.selected rect{stroke:var(--accent2);stroke-width:3}
+.gensym{fill:var(--panel);stroke:var(--accent);stroke-width:2;cursor:pointer}
+.brksym{fill:var(--accent2);stroke:var(--accent2);cursor:pointer}
+.ghost{stroke:var(--accent);stroke-width:2;stroke-dasharray:5 4;fill:none;pointer-events:none;opacity:.7}
+#panel{width:280px;background:var(--panel);border-left:1px solid var(--line);padding:14px;overflow-y:auto;
+  padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+#panel h3{margin:0 0 10px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.field{margin-bottom:9px}
+.field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+.field input,.field select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+  background:var(--bg);color:var(--text);font:inherit;font-size:13px}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:6px}
+.empty{color:var(--muted);font-size:13px;line-height:1.6}
+#status{font-size:11.5px;color:var(--muted);margin-left:auto;padding-right:4px}
+.delbtn{background:var(--accent2);color:#fff;border-color:var(--accent2);width:100%;margin-top:10px}
+@media (max-width:680px){#panel{width:220px;padding:10px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ SLD Editor</h1>
+  <button id="tBus" title="Click canvas to place a bus">+ Bus</button>
+  <button id="tLine" title="Click source bus then target bus">+ Line</button>
+  <button id="tGen" title="Click a bus to attach a generator">+ Gen</button>
+  <button id="tBrk" title="Click a bus to attach a breaker">+ Breaker</button>
+  <button id="tSelect" class="active" title="Select / move / edit">Select</button>
+  <div class="sep"></div>
+  <button id="btnExport">Export JSON</button>
+  <button id="btnImport">Import JSON</button>
+  <button id="btnClear">Clear</button>
+  <input type="file" id="fileInput" accept=".json" style="display:none">
+  <span id="status"></span>
+</header>
+<main>
+  <div id="canvasWrap">
+    <svg id="svg" width="1600" height="1100"></svg>
+  </div>
+  <div id="panel"><div class="empty">Select or place an element to edit its properties.<br><br>
+    <b>Workflow:</b><br>1. "+ Bus" then click canvas to drop buses.<br>
+    2. "+ Line" then click bus A, then bus B, to connect.<br>
+    3. "+ Gen" / "+ Breaker" then click a bus to attach.<br>
+    4. Click "Select" to click any element and edit its properties (id, kV, R/X, P/Q, ratings...) here.<br>
+    5. "Export JSON" gives a file matching the PowerSys Network schema (buses/branches/gens/breakers) used by the load-flow, short-circuit, breaker-duty, and arc-flash modules.</div></div>
+</main>
+<script>
+const NS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("svg"), panel=document.getElementById("panel"), status=document.getElementById("status");
+let state={buses:[],branches:[],gens:[],breakers:[]};
+let nextBusN=1, mode="select", pendingLineFrom=null, selected=null, dragBus=null, dragOff=[0,0];
+
+const tools={tBus:"bus",tLine:"line",tGen:"gen",tBrk:"brk",tSelect:"select"};
+Object.keys(tools).forEach(id=>document.getElementById(id).onclick=()=>setMode(tools[id]));
+function setMode(m){mode=m;pendingLineFrom=null;
+  Object.keys(tools).forEach(id=>document.getElementById(id).classList.toggle("active",tools[id]===m));
+  render();}
+
+function busById(id){return state.buses.find(b=>b.id===id)}
+
+svg.addEventListener("click",e=>{
+  if(dragBus) return;
+  const pt=svgPoint(e);
+  if(mode==="bus"){
+    const id=nextBusN++;
+    state.buses.push({id,type:1,pd:0,qd:0,bs:0,vm:1.0,va:0,kv:11,x:pt.x,y:pt.y,label:"Bus "+id});
+    selected={kind:"bus",id}; setMode("select"); render(); return;
+  }
+  const hit=e.target.closest("[data-kind]");
+  if(!hit) { if(mode==="select"){selected=null; render();} return; }
+  const kind=hit.dataset.kind, id=hit.dataset.id;
+  if(mode==="line"){
+    if(kind!=="bus") return;
+    if(!pendingLineFrom){pendingLineFrom=Number(id); status.textContent="Now click the destination bus...";}
+    else{
+      const f=pendingLineFrom, t=Number(id);
+      if(f!==t){state.branches.push({f,t,r:0.01,x:0.1,b:0,tap:0,id:"L"+f+"-"+t});}
+      pendingLineFrom=null; status.textContent=""; setMode("select");
+    }
+    render(); return;
+  }
+  if(mode==="gen" && kind==="bus"){
+    const bus=Number(id);
+    state.gens.push({bus,pg:0,vg:1.0,qmin:-50,qmax:50,xd2:0.2,id:"G-"+bus});
+    selected={kind:"gen",id:state.gens.length-1}; setMode("select"); render(); return;
+  }
+  if(mode==="brk" && kind==="bus"){
+    const bus=Number(id);
+    state.breakers.push({id:"CB-"+bus,bus,rated_kv:11,rated_break_kA:25,rated_make_kA:65});
+    selected={kind:"brk",id:state.breakers.length-1}; setMode("select"); render(); return;
+  }
+  if(mode==="select"){
+    if(kind==="bus") selected={kind:"bus",id:Number(id)};
+    else if(kind==="branch") selected={kind:"branch",id:Number(id)};
+    else if(kind==="gen") selected={kind:"gen",id:Number(id)};
+    else if(kind==="brk") selected={kind:"brk",id:Number(id)};
+    render();
+  }
+});
+
+svg.addEventListener("mousedown",e=>{
+  if(mode!=="select") return;
+  const hit=e.target.closest('[data-kind="bus"]'); if(!hit) return;
+  dragBus=busById(Number(hit.dataset.id)); const pt=svgPoint(e);
+  dragOff=[pt.x-dragBus.x, pt.y-dragBus.y];
+});
+svg.addEventListener("mousemove",e=>{
+  if(!dragBus) return; const pt=svgPoint(e);
+  dragBus.x=pt.x-dragOff[0]; dragBus.y=pt.y-dragOff[1]; render();
+});
+window.addEventListener("mouseup",()=>{dragBus=null});
+svg.addEventListener("touchstart",e=>{const t=e.touches[0]; svg.dispatchEvent(new MouseEvent("mousedown",{clientX:t.clientX,clientY:t.clientY}));},{passive:true});
+svg.addEventListener("touchmove",e=>{const t=e.touches[0]; svg.dispatchEvent(new MouseEvent("mousemove",{clientX:t.clientX,clientY:t.clientY}));},{passive:true});
+
+function svgPoint(e){
+  const r=svg.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*(svg.viewBox.baseVal.width||1600)/r.width || e.clientX-r.left,
+          y:(e.clientY-r.top)*(svg.viewBox.baseVal.height||1100)/r.height || e.clientY-r.top};
+}
+
+function el(tag,attrs,parent){const n=document.createElementNS(NS,tag);
+  for(const k in attrs) n.setAttribute(k,attrs[k]); if(parent) parent.appendChild(n); return n;}
+
+function render(){
+  svg.innerHTML="";
+  // branches
+  state.branches.forEach((br,i)=>{
+    const f=busById(br.f), t=busById(br.t); if(!f||!t) return;
+    const g=el("g",{"data-kind":"branch","data-id":i},svg);
+    el("line",{x1:f.x,y1:f.y,x2:t.x,y2:t.y,class:"branch"+(selected&&selected.kind==="branch"&&selected.id===i?" selected":"")},g);
+    const mx=(f.x+t.x)/2, my=(f.y+t.y)/2;
+    el("text",{x:mx,y:my-6,fill:"var(--muted)","font-size":"9.5",style:"pointer-events:none"},g).textContent=(br.id||"")+" ("+br.r+"+j"+br.x+")";
+  });
+  // buses
+  state.buses.forEach(b=>{
+    const g=el("g",{"data-kind":"bus","data-id":b.id,class:"bus"+(selected&&selected.kind==="bus"&&selected.id===b.id?" selected":"")},svg);
+    el("rect",{x:b.x-28,y:b.y-6,width:56,height:12,rx:2},g);
+    el("text",{x:b.x,y:b.y-14,"text-anchor":"middle"},g).textContent=b.label||("Bus "+b.id);
+    el("text",{x:b.x,y:b.y+26,"text-anchor":"middle",class:"sub"},g).textContent=b.kv+" kV";
+  });
+  // gens
+  state.gens.forEach((g,i)=>{
+    const b=busById(g.bus); if(!b) return;
+    const grp=el("g",{"data-kind":"gen","data-id":i},svg);
+    el("circle",{cx:b.x,cy:b.y+55,r:16,class:"gensym"+(selected&&selected.kind==="gen"&&selected.id===i?" selected":"")},grp);
+    el("line",{x1:b.x,y1:b.y+6,x2:b.x,y2:b.y+39,stroke:"var(--accent)","stroke-width":2},grp);
+    el("text",{x:b.x,y:b.y+60,"text-anchor":"middle","font-size":"12",fill:"var(--accent)"},grp).textContent="G";
+  });
+  // breakers
+  state.breakers.forEach((cb,i)=>{
+    const b=busById(cb.bus); if(!b) return;
+    const grp=el("g",{"data-kind":"brk","data-id":i},svg);
+    el("rect",{x:b.x-38,y:b.y-24,width:10,height:10,class:"brksym"+(selected&&selected.kind==="brk"&&selected.id===i?" selected":"")},grp);
+    el("text",{x:b.x-33,y:b.y-28,"text-anchor":"middle","font-size":"8",fill:"var(--accent2)"},grp).textContent="CB";
+  });
+  if(mode==="line" && pendingLineFrom!=null){
+    const f=busById(pendingLineFrom);
+    if(f) el("circle",{cx:f.x,cy:f.y,r:20,class:"ghost"},svg);
+  }
+  renderPanel();
+}
+
+function field(label,value,onChange,type="text"){
+  const wrap=document.createElement("div"); wrap.className="field";
+  const l=document.createElement("label"); l.textContent=label; wrap.appendChild(l);
+  const inp=document.createElement("input"); inp.type=type; inp.value=value;
+  inp.step="any";
+  inp.addEventListener("change",()=>onChange(type==="number"?parseFloat(inp.value):inp.value));
+  wrap.appendChild(inp); panel.appendChild(wrap); return inp;
+}
+
+function renderPanel(){
+  panel.innerHTML="";
+  if(!selected){panel.innerHTML='<div class="empty">Select or place an element to edit its properties.</div>'; return;}
+  const h=document.createElement("h3"); panel.appendChild(h);
+  if(selected.kind==="bus"){
+    const b=busById(selected.id); h.textContent="Bus "+b.id;
+    field("Label",b.label,v=>{b.label=v;render();});
+    field("Bus type (1=PQ,2=PV,3=Slack)",b.type,v=>b.type=v,"number");
+    field("kV",b.kv,v=>{b.kv=v;render();},"number");
+    field("Load P (MW)",b.pd,v=>b.pd=v,"number");
+    field("Load Q (MVAr)",b.qd,v=>b.qd=v,"number");
+    field("Shunt B (MVAr)",b.bs,v=>b.bs=v,"number");
+    field("Voltage setpoint (pu)",b.vm,v=>b.vm=v,"number");
+    delBtn(()=>{state.buses=state.buses.filter(x=>x.id!==b.id);
+      state.branches=state.branches.filter(x=>x.f!==b.id&&x.t!==b.id);
+      state.gens=state.gens.filter(x=>x.bus!==b.id);
+      state.breakers=state.breakers.filter(x=>x.bus!==b.id);
+      selected=null; render();});
+  } else if(selected.kind==="branch"){
+    const br=state.branches[selected.id]; h.textContent="Branch "+br.id;
+    field("ID",br.id,v=>br.id=v);
+    field("R (pu)",br.r,v=>br.r=v,"number");
+    field("X (pu)",br.x,v=>br.x=v,"number");
+    field("Charging B (pu)",br.b,v=>br.b=v,"number");
+    field("Tap (0 = line, else xfmr ratio)",br.tap,v=>br.tap=v,"number");
+    delBtn(()=>{state.branches.splice(selected.id,1); selected=null; render();});
+  } else if(selected.kind==="gen"){
+    const g=state.gens[selected.id]; h.textContent="Generator "+g.id;
+    field("ID",g.id,v=>g.id=v);
+    field("Pg (MW)",g.pg,v=>g.pg=v,"number");
+    field("Voltage setpoint Vg (pu)",g.vg,v=>g.vg=v,"number");
+    field("Qmin (MVAr)",g.qmin,v=>g.qmin=v,"number");
+    field("Qmax (MVAr)",g.qmax,v=>g.qmax=v,"number");
+    field("X'd (pu, for SC/stability)",g.xd2,v=>g.xd2=v,"number");
+    delBtn(()=>{state.gens.splice(selected.id,1); selected=null; render();});
+  } else if(selected.kind==="brk"){
+    const cb=state.breakers[selected.id]; h.textContent="Breaker "+cb.id;
+    field("ID",cb.id,v=>cb.id=v);
+    field("Rated kV",cb.rated_kv,v=>cb.rated_kv=v,"number");
+    field("Rated breaking (kA)",cb.rated_break_kA,v=>cb.rated_break_kA=v,"number");
+    field("Rated making (kA)",cb.rated_make_kA,v=>cb.rated_make_kA=v,"number");
+    delBtn(()=>{state.breakers.splice(selected.id,1); selected=null; render();});
+  }
+}
+function delBtn(fn){const b=document.createElement("button"); b.textContent="Delete"; b.className="delbtn"; b.onclick=fn; panel.appendChild(b);}
+
+document.getElementById("btnExport").onclick=()=>{
+  const data={base_mva:100,
+    buses:state.buses.map(({x,y,label,...rest})=>rest),
+    branches:state.branches.map(({...rest})=>rest),
+    gens:state.gens.map(({...rest})=>rest),
+    breakers:state.breakers.map(({...rest})=>rest),
+    _layout:state.buses.map(b=>({id:b.id,x:b.x,y:b.y,label:b.label}))
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="network.json"; a.click();
+};
+document.getElementById("btnImport").onclick=()=>document.getElementById("fileInput").click();
+document.getElementById("fileInput").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      const layout={}; (data._layout||[]).forEach(l=>layout[l.id]=l);
+      state.buses=(data.buses||[]).map((b,i)=>({...b, x:layout[b.id]?.x ?? (150+ (i%6)*220), y:layout[b.id]?.y ?? (120+Math.floor(i/6)*160), label:layout[b.id]?.label ?? ("Bus "+b.id)}));
+      state.branches=data.branches||[]; state.gens=data.gens||[]; state.breakers=data.breakers||[];
+      nextBusN=Math.max(0,...state.buses.map(b=>b.id))+1;
+      selected=null; status.textContent="Imported "+state.buses.length+" buses"; render();
+    }catch(err){ status.textContent="Import failed: "+err.message; }
+  };
+  reader.readAsText(f);
+});
+document.getElementById("btnClear").onclick=()=>{
+  if(confirm("Clear the whole diagram?")){state={buses:[],branches:[],gens:[],breakers:[]}; nextBusN=1; selected=null; render();}
+};
+
+render();
+</script>
+</body>
+</html>

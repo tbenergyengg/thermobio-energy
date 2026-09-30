@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PowerSys Desktop</title>
+<style>
+:root{
+  --bg:#f4f6f8; --panel:#ffffff; --line:#c7ccd1; --text:#1a2027; --muted:#5b6570;
+  --accent:#2563eb; --accent2:#dc2626; --busfill:#1a2027; --grid:#e2e6ea; --ok:#16a34a;
+  --toolbtn:#eef1f4; --toolbtn-active:#2563eb; --toolbtn-active-text:#fff;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161b; --panel:#1a1f26; --line:#3a4048; --text:#e6e9ec; --muted:#9aa4ae;
+  --accent:#3b82f6; --accent2:#f87171; --busfill:#e6e9ec; --grid:#232a32; --toolbtn:#232a32; --ok:#4ade80;}}
+:root[data-theme="dark"]{--bg:#12161b; --panel:#1a1f26; --line:#3a4048; --text:#e6e9ec; --muted:#9aa4ae;
+  --accent:#3b82f6; --accent2:#f87171; --busfill:#e6e9ec; --grid:#232a32; --toolbtn:#232a32; --ok:#4ade80;}
+*{box-sizing:border-box} html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column;overflow:hidden}
+header{padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top,0px));background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+h1{font-size:15px;margin:0 10px 0 0;font-weight:600;white-space:nowrap}
+button{font:inherit;font-size:12.5px;padding:7px 11px;border-radius:7px;border:1px solid var(--line);background:var(--toolbtn);color:var(--text);cursor:pointer;white-space:nowrap}
+button.active{background:var(--toolbtn-active);color:var(--toolbtn-active-text);border-color:var(--toolbtn-active)}
+button:hover{filter:brightness(1.05)} .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+nav{display:flex;gap:4px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+nav button{background:transparent;border:none;border-radius:0;padding:6px 12px;border-bottom:2px solid transparent;font-size:13px}
+nav button.active{border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600}
+main{flex:1;display:flex;min-height:0}
+#canvasWrap{flex:1;overflow:auto;position:relative;background:linear-gradient(var(--grid) 1px, transparent 1px) 0 0/20px 20px,linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/20px 20px, var(--bg)}
+svg{display:block;cursor:crosshair}
+.bus rect{fill:var(--busfill);stroke:var(--text);stroke-width:1} .bus text{fill:var(--text);font-size:11px;font-weight:600}
+.bus .sub{fill:var(--muted);font-size:9px;font-weight:400}
+.branch{stroke:var(--accent);stroke-width:2.4;fill:none;cursor:pointer}
+.branch.selected,.bus.selected rect{stroke:var(--accent2);stroke-width:3}
+.gensym{fill:var(--panel);stroke:var(--accent);stroke-width:2;cursor:pointer}
+.brksym{fill:var(--accent2);stroke:var(--accent2);cursor:pointer}
+.ghost{stroke:var(--accent);stroke-width:2;stroke-dasharray:5 4;fill:none;pointer-events:none;opacity:.7}
+#panel{width:280px;background:var(--panel);border-left:1px solid var(--line);padding:14px;overflow-y:auto;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+#panel h3{margin:0 0 10px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.field{margin-bottom:9px} .field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+.field input{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit;font-size:13px}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:6px}
+.empty{color:var(--muted);font-size:13px;line-height:1.6}
+#status{font-size:11.5px;color:var(--muted);margin-left:auto;padding-right:4px}
+.delbtn{background:var(--accent2);color:#fff;border-color:var(--accent2);width:100%;margin-top:10px}
+#reportWrap{flex:1;overflow:auto;padding:18px}
+table{border-collapse:collapse;width:100%;margin-bottom:22px;font-size:13px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase}
+.pass{color:var(--ok);font-weight:600} .fail{color:var(--accent2);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+.card h2{font-size:14px;margin:0 0 10px}
+.warn{color:var(--accent2);font-size:12px;margin-top:4px}
+@media (max-width:680px){#panel{width:210px;padding:10px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ PowerSys Desktop</h1>
+  <button id="tBus">+ Bus</button><button id="tLine">+ Line</button>
+  <button id="tGen">+ Gen</button><button id="tBrk">+ Breaker</button>
+  <button id="tSelect" class="active">Select</button>
+  <div class="sep"></div>
+  <button id="btnExport">Export JSON</button><button id="btnImport">Import JSON</button>
+  <button id="btnDemo">Load Demo Network</button><button id="btnClear">Clear</button>
+  <input type="file" id="fileInput" accept=".json" style="display:none">
+  <span id="status"></span>
+</header>
+<nav>
+  <button class="tab active" data-tab="dash">Dashboard</button>
+  <button class="tab" data-tab="diagram">Diagram</button>
+  <button class="tab" data-tab="lf">Load Flow</button>
+  <button class="tab" data-tab="sc">Short Circuit</button>
+  <button class="tab" data-tab="bd">Breaker Duty</button>
+  <button class="tab" data-tab="tcc">Protection / TCC</button>
+  <button class="tab" data-tab="af">Arc Flash</button>
+  <button class="tab" data-tab="st">Stability</button>
+  <button class="tab" data-tab="lib">Library</button>
+</nav>
+<main id="mainDiagram" style="display:none">
+  <div id="canvasWrap"><svg id="svg" width="1600" height="1100"></svg></div>
+  <div id="panel"><div class="empty">Place buses, lines, generators and breakers, then switch tabs above to run load flow, short-circuit and breaker-duty checks on this network -- all computed right here in the browser.</div></div>
+</main>
+<main id="mainReport" style="display:block"><div id="reportWrap"></div></main>
+<script>
+/* ===================== Diagram editor (buses/branches/gens/breakers) ===================== */
+const NS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("svg"), panel=document.getElementById("panel"), status=document.getElementById("status");
+let state={buses:[],branches:[],gens:[],breakers:[]};
+let nextBusN=1, mode="select", pendingLineFrom=null, selected=null, dragBus=null, dragOff=[0,0];
+const tools={tBus:"bus",tLine:"line",tGen:"gen",tBrk:"brk",tSelect:"select"};
+Object.keys(tools).forEach(id=>document.getElementById(id).onclick=()=>setMode(tools[id]));
+function setMode(m){mode=m;pendingLineFrom=null;Object.keys(tools).forEach(id=>document.getElementById(id).classList.toggle("active",tools[id]===m));render();}
+function busById(id){return state.buses.find(b=>b.id===id)}
+svg.addEventListener("click",e=>{
+  if(dragBus) return; const pt=svgPoint(e);
+  if(mode==="bus"){const id=nextBusN++; state.buses.push({id,type:1,pd:0,qd:0,bs:0,vm:1.0,va:0,kv:11,x:pt.x,y:pt.y,label:"Bus "+id});
+    selected={kind:"bus",id}; setMode("select"); return;}
+  const hit=e.target.closest("[data-kind]");
+  if(!hit){if(mode==="select"){selected=null; render();} return;}
+  const kind=hit.dataset.kind, id=hit.dataset.id;
+  if(mode==="line"){ if(kind!=="bus") return;
+    if(!pendingLineFrom){pendingLineFrom=Number(id); status.textContent="Click destination bus...";}
+    else{const f=pendingLineFrom, t=Number(id); if(f!==t) state.branches.push({f,t,r:0.01,x:0.1,b:0,tap:0,id:"L"+f+"-"+t});
+      pendingLineFrom=null; status.textContent=""; setMode("select");}
+    render(); return;}
+  if(mode==="gen" && kind==="bus"){const bus=Number(id);
+    state.gens.push({bus,pg:0,vg:1.0,qmin:-50,qmax:50,xd2:0.2,id:"G-"+bus});
+    selected={kind:"gen",id:state.gens.length-1}; setMode("select"); return;}
+  if(mode==="brk" && kind==="bus"){const bus=Number(id);
+    state.breakers.push({id:"CB-"+bus,bus,rated_kv:11,rated_break_kA:25,rated_make_kA:65});
+    selected={kind:"brk",id:state.breakers.length-1}; setMode("select"); return;}
+  if(mode==="select"){
+    if(kind==="bus") selected={kind:"bus",id:Number(id)};
+    else if(kind==="branch") selected={kind:"branch",id:Number(id)};
+    else if(kind==="gen") selected={kind:"gen",id:Number(id)};
+    else if(kind==="brk") selected={kind:"brk",id:Number(id)};
+    render();}
+});
+svg.addEventListener("mousedown",e=>{if(mode!=="select") return;
+  const hit=e.target.closest('[data-kind="bus"]'); if(!hit) return;
+  dragBus=busById(Number(hit.dataset.id)); const pt=svgPoint(e); dragOff=[pt.x-dragBus.x, pt.y-dragBus.y];});
+svg.addEventListener("mousemove",e=>{if(!dragBus) return; const pt=svgPoint(e);
+  dragBus.x=pt.x-dragOff[0]; dragBus.y=pt.y-dragOff[1]; render();});
+window.addEventListener("mouseup",()=>{dragBus=null});
+function svgPoint(e){const r=svg.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*1600/r.width, y:(e.clientY-r.top)*1100/r.height};}
+function el(tag,attrs,parent){const n=document.createElementNS(NS,tag);
+  for(const k in attrs) n.setAttribute(k,attrs[k]); if(parent) parent.appendChild(n); return n;}
+function render(){
+  svg.innerHTML="";
+  state.branches.forEach((br,i)=>{const f=busById(br.f), t=busById(br.t); if(!f||!t) return;
+    const g=el("g",{"data-kind":"branch","data-id":i},svg);
+    el("line",{x1:f.x,y1:f.y,x2:t.x,y2:t.y,class:"branch"+(selected&&selected.kind==="branch"&&selected.id===i?" selected":"")},g);
+    const mx=(f.x+t.x)/2, my=(f.y+t.y)/2;
+    el("text",{x:mx,y:my-6,fill:"var(--muted)","font-size":"9.5",style:"pointer-events:none"},g).textContent=(br.id||"")+" ("+br.r+"+j"+br.x+")";});
+  state.buses.forEach(b=>{const g=el("g",{"data-kind":"bus","data-id":b.id,class:"bus"+(selected&&selected.kind==="bus"&&selected.id===b.id?" selected":"")},svg);
+    el("rect",{x:b.x-28,y:b.y-6,width:56,height:12,rx:2},g);
+    el("text",{x:b.x,y:b.y-14,"text-anchor":"middle"},g).textContent=b.label||("Bus "+b.id);
+    el("text",{x:b.x,y:b.y+26,"text-anchor":"middle",class:"sub"},g).textContent=b.kv+" kV / "+["","PQ","PV","Slack"][b.type];});
+  state.gens.forEach((g,i)=>{const b=busById(g.bus); if(!b) return;
+    const grp=el("g",{"data-kind":"gen","data-id":i},svg);
+    el("circle",{cx:b.x,cy:b.y+55,r:16,class:"gensym"+(selected&&selected.kind==="gen"&&selected.id===i?" selected":"")},grp);
+    el("line",{x1:b.x,y1:b.y+6,x2:b.x,y2:b.y+39,stroke:"var(--accent)","stroke-width":2},grp);
+    el("text",{x:b.x,y:b.y+60,"text-anchor":"middle","font-size":"12",fill:"var(--accent)"},grp).textContent="G";});
+  state.breakers.forEach((cb,i)=>{const b=busById(cb.bus); if(!b) return;
+    const grp=el("g",{"data-kind":"brk","data-id":i},svg);
+    el("rect",{x:b.x-38,y:b.y-24,width:10,height:10,class:"brksym"+(selected&&selected.kind==="brk"&&selected.id===i?" selected":"")},grp);
+    el("text",{x:b.x-33,y:b.y-28,"text-anchor":"middle","font-size":"8",fill:"var(--accent2)"},grp).textContent="CB";});
+  if(mode==="line" && pendingLineFrom!=null){const f=busById(pendingLineFrom); if(f) el("circle",{cx:f.x,cy:f.y,r:20,class:"ghost"},svg);}
+  renderPanel();
+}
+function field(label,value,onChange){const wrap=document.createElement("div"); wrap.className="field";
+  const l=document.createElement("label"); l.textContent=label; wrap.appendChild(l);
+  const inp=document.createElement("input"); inp.value=value;
+  inp.addEventListener("change",()=>onChange(isNaN(parseFloat(inp.value))?inp.value:parseFloat(inp.value)));
+  wrap.appendChild(inp); panel.appendChild(wrap); return inp;}
+function libSelect(label, items, currentIdx, onPick){
+  const wrap=document.createElement("div"); wrap.className="field";
+  const l=document.createElement("label"); l.textContent=label; wrap.appendChild(l);
+  const sel=document.createElement("select"); sel.style.cssText="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit;font-size:12.5px";
+  const blank=document.createElement("option"); blank.value=""; blank.textContent="(choose from library...)"; sel.appendChild(blank);
+  items.forEach((it,i)=>{const o=document.createElement("option"); o.value=i; o.textContent=it.name;
+    if(currentIdx===i) o.selected=true; sel.appendChild(o);});
+  sel.addEventListener("change",()=>{if(sel.value!=="") onPick(Number(sel.value));});
+  wrap.appendChild(sel); panel.appendChild(wrap); return sel;
+}
+function delBtn(fn){const b=document.createElement("button"); b.textContent="Delete"; b.className="delbtn"; b.onclick=fn; panel.appendChild(b);}
+function renderPanel(){
+  panel.innerHTML="";
+  if(!selected){panel.innerHTML='<div class="empty">Select or place an element to edit its properties.</div>'; return;}
+  const h=document.createElement("h3"); panel.appendChild(h);
+  if(selected.kind==="bus"){const b=busById(selected.id); h.textContent="Bus "+b.id;
+    field("Label",b.label,v=>{b.label=v;render();});
+    field("Bus type (1=PQ,2=PV,3=Slack)",b.type,v=>{b.type=v;render();});
+    field("kV",b.kv,v=>{b.kv=v;render();});
+    field("Load P (MW)",b.pd,v=>b.pd=v); field("Load Q (MVAr)",b.qd,v=>b.qd=v);
+    field("Shunt B (MVAr)",b.bs,v=>b.bs=v); field("Voltage setpoint (pu)",b.vm,v=>b.vm=v);
+    field("Arc gap (mm)",b.gap_mm ?? (b.kv<1?32:104),v=>b.gap_mm=v);
+    field("Working distance (mm)",b.D_mm ?? 455,v=>b.D_mm=v);
+    delBtn(()=>{state.buses=state.buses.filter(x=>x.id!==b.id);
+      state.branches=state.branches.filter(x=>x.f!==b.id&&x.t!==b.id);
+      state.gens=state.gens.filter(x=>x.bus!==b.id); state.breakers=state.breakers.filter(x=>x.bus!==b.id);
+      selected=null; render();});
+  } else if(selected.kind==="branch"){const br=state.branches[selected.id]; h.textContent="Branch "+br.id;
+    field("ID",br.id,v=>br.id=v);
+    libSelect("Line/cable preset", LIBRARY.lines, br.libraryLine, i=>{
+      const km=parseFloat(prompt("Length (km)?", br.length_km||1)||"1");
+      applyLinePreset(br, i, km, state.base_mva||100); render();});
+    libSelect("Transformer preset", LIBRARY.transformers, br.libraryXfmr, i=>{
+      applyXfmrPreset(br, i, state.base_mva||100); render();});
+    field("R (pu)",br.r,v=>br.r=v); field("X (pu)",br.x,v=>br.x=v);
+    field("Charging B (pu)",br.b,v=>br.b=v); field("Tap (0=line, else xfmr)",br.tap,v=>br.tap=v);
+    delBtn(()=>{state.branches.splice(selected.id,1); selected=null; render();});
+  } else if(selected.kind==="gen"){const g=state.gens[selected.id]; h.textContent="Generator "+g.id;
+    field("ID",g.id,v=>g.id=v);
+    libSelect("Generator preset", LIBRARY.generators, g.libraryGen, i=>{applyGenPreset(g,i); render();});
+    field("Pg (MW)",g.pg,v=>g.pg=v); field("Vg (pu)",g.vg,v=>g.vg=v);
+    field("Qmin (MVAr)",g.qmin,v=>g.qmin=v); field("Qmax (MVAr)",g.qmax,v=>g.qmax=v);
+    field("X'd (pu)",g.xd2,v=>g.xd2=v);
+    field("Inertia H (MW.s/MVA)",g.H ?? 4.0,v=>g.H=v);
+    field("Damping D",g.D ?? 2.0,v=>g.D=v);
+    delBtn(()=>{state.gens.splice(selected.id,1); selected=null; render();});
+  } else if(selected.kind==="brk"){const cb=state.breakers[selected.id]; h.textContent="Breaker "+cb.id;
+    field("ID",cb.id,v=>cb.id=v);
+    libSelect("Breaker preset", LIBRARY.breakers, cb.libraryBrk, i=>{applyBrkPreset(cb,i); render();});
+    field("Rated kV",cb.rated_kv,v=>cb.rated_kv=v);
+    field("Rated breaking (kA)",cb.rated_break_kA,v=>cb.rated_break_kA=v);
+    field("Rated making (kA)",cb.rated_make_kA,v=>cb.rated_make_kA=v);
+    field("Relay pickup (A)",cb.relay_pickup_A ?? 300,v=>cb.relay_pickup_A=v);
+    field("Relay curve (NI/VI/EI/LTI)",cb.relay_curve ?? "VI",v=>cb.relay_curve=v);
+    field("Relay dial (TMS)",cb.relay_dial ?? 0.2,v=>cb.relay_dial=v);
+    field("Instantaneous pickup (A, 0=none)",cb.relay_inst_A ?? 0,v=>cb.relay_inst_A=v);
+    field("Breaker opening time (s)",cb.breaker_time_s ?? 0.05,v=>cb.breaker_time_s=v);
+    delBtn(()=>{state.breakers.splice(selected.id,1); selected=null; render();});
+  }
+}
+document.getElementById("btnExport").onclick=()=>{
+  const data={base_mva:100, buses:state.buses.map(({x,y,label,...r})=>r), branches:state.branches,
+    gens:state.gens, breakers:state.breakers,
+    _layout:state.buses.map(b=>({id:b.id,x:b.x,y:b.y,label:b.label}))};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="network.json"; a.click();};
+document.getElementById("btnImport").onclick=()=>document.getElementById("fileInput").click();
+document.getElementById("fileInput").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return; const reader=new FileReader();
+  reader.onload=()=>{try{const data=JSON.parse(reader.result); loadNetwork(data);}catch(err){status.textContent="Import failed: "+err.message;}};
+  reader.readAsText(f);});
+function loadNetwork(data){
+  const layout={}; (data._layout||[]).forEach(l=>layout[l.id]=l);
+  state.buses=(data.buses||[]).map((b,i)=>({...b, x:layout[b.id]?.x ?? (150+(i%6)*220), y:layout[b.id]?.y ?? (120+Math.floor(i/6)*160), label:layout[b.id]?.label ?? ("Bus "+b.id)}));
+  state.branches=data.branches||[]; state.gens=data.gens||[]; state.breakers=data.breakers||[];
+  nextBusN=Math.max(0,...state.buses.map(b=>b.id))+1; selected=null; render();
+}
+document.getElementById("btnClear").onclick=()=>{if(confirm("Clear the whole diagram?")){state={buses:[],branches:[],gens:[],breakers:[]}; nextBusN=1; selected=null; render();}};
+document.getElementById("btnDemo").onclick=()=>loadNetwork(DEMO_NETWORK);
+
+/* ===================== Tabs ===================== */
+function switchTab(tab){
+  document.querySelectorAll("nav .tab").forEach(b=>b.classList.toggle("active", b.dataset.tab===tab));
+  document.getElementById("mainDiagram").style.display = tab==="diagram" ? "flex":"none";
+  document.getElementById("mainReport").style.display = tab==="diagram" ? "none":"block";
+  if(tab==="dash") renderDashboardTab();
+  if(tab==="lf") renderLoadFlowTab();
+  if(tab==="sc") renderShortCircuitTab();
+  if(tab==="bd") renderBreakerDutyTab();
+  if(tab==="tcc") renderProtectionTab();
+  if(tab==="af") renderArcFlashTab();
+  if(tab==="st") renderStabilityTab();
+  if(tab==="lib") renderLibraryTab();
+}
+document.querySelectorAll("nav .tab").forEach(btn=>btn.onclick=()=>switchTab(btn.dataset.tab));
+
+/* ===================== Numerical engine: complex + linear algebra ===================== */
+const C=(re,im=0)=>({re,im});
+const cAdd=(a,b)=>C(a.re+b.re,a.im+b.im), cSub=(a,b)=>C(a.re-b.re,a.im-b.im);
+const cMul=(a,b)=>C(a.re*b.re-a.im*b.im, a.re*b.im+a.im*b.re);
+const cDiv=(a,b)=>{const d=b.re*b.re+b.im*b.im; return C((a.re*b.re+a.im*b.im)/d,(a.im*b.re-a.re*b.im)/d);};
+const cInv=a=>cDiv(C(1,0),a), cConj=a=>C(a.re,-a.im), cAbs=a=>Math.hypot(a.re,a.im), cNeg=a=>C(-a.re,-a.im);
+const cExp=theta=>C(Math.cos(theta),Math.sin(theta));
+
+function zeros(n){return Array.from({length:n},()=>Array.from({length:n},()=>C(0,0)));}
+function complexInverse(Y){ // Gauss-Jordan on augmented [Y|I], returns Z=Y^-1
+  const n=Y.length; const A=Y.map(row=>row.map(v=>C(v.re,v.im)));
+  const I=zeros(n); for(let i=0;i<n;i++) I[i][i]=C(1,0);
+  for(let col=0; col<n; col++){
+    let piv=col, best=cAbs(A[col][col]);
+    for(let r=col+1;r<n;r++){const m=cAbs(A[r][col]); if(m>best){best=m; piv=r;}}
+    if(piv!==col){[A[col],A[piv]]=[A[piv],A[col]]; [I[col],I[piv]]=[I[piv],I[col]];}
+    const pv=A[col][col];
+    for(let j=0;j<n;j++){A[col][j]=cDiv(A[col][j],pv); I[col][j]=cDiv(I[col][j],pv);}
+    for(let r=0;r<n;r++){ if(r===col) continue; const f=A[r][col];
+      if(cAbs(f)===0) continue;
+      for(let j=0;j<n;j++){A[r][j]=cSub(A[r][j],cMul(f,A[col][j])); I[r][j]=cSub(I[r][j],cMul(f,I[col][j]));}}
+  }
+  return I;
+}
+function solveReal(Jflat,n,b){ // Gaussian elimination, real, Jflat is n x n array of arrays
+  const A=Jflat.map(row=>row.slice()); const x=b.slice();
+  for(let col=0; col<n; col++){
+    let piv=col, best=Math.abs(A[col][col]);
+    for(let r=col+1;r<n;r++){const m=Math.abs(A[r][col]); if(m>best){best=m; piv=r;}}
+    if(piv!==col){[A[col],A[piv]]=[A[piv],A[col]]; [x[col],x[piv]]=[x[piv],x[col]];}
+    for(let r=col+1;r<n;r++){const f=A[r][col]/A[col][col];
+      if(f===0) continue;
+      for(let j=col;j<n;j++) A[r][j]-=f*A[col][j];
+      x[r]-=f*x[col];}
+  }
+  const sol=new Array(n);
+  for(let i=n-1;i>=0;i--){let s=x[i]; for(let j=i+1;j<n;j++) s-=A[i][j]*sol[j]; sol[i]=s/A[i][i];}
+  return sol;
+}
+
+/* ===================== Ybus builders ===================== */
+function buildIndex(buses){const idx={}; buses.forEach((b,i)=>idx[b.id]=i); return idx;}
+function buildYbusPos(net){ // positive-sequence Ybus (used for load flow and SC seq1)
+  const idx=buildIndex(net.buses), n=net.buses.length, Y=zeros(n);
+  net.branches.forEach(br=>{const f=idx[br.f], t=idx[br.t], tap=br.tap||1.0;
+    const z=C(br.r,br.x), y=cInv(z), bc=C(0,(br.b||0)/2);
+    const yft=cDiv(cAdd(y,bc),C(tap*tap,0));
+    Y[f][f]=cAdd(Y[f][f], yft); Y[t][t]=cAdd(Y[t][t], y);
+    const yc=cDiv(y,C(tap,0)); Y[f][t]=cSub(Y[f][t],yc); Y[t][f]=cSub(Y[t][f],yc);});
+  net.gens.forEach(g=>{const i=idx[g.bus]; const x1=g.xd2*net.base_mva/(g.mva||net.base_mva);
+    Y[i][i]=cAdd(Y[i][i], cInv(C(0,x1)));}); // only used by SC seq1, load flow ignores this (gens are PV/slack sources there)
+  net.buses.forEach((b,i)=>{Y[i][i]=cAdd(Y[i][i], C((b.gs||0)/net.base_mva,(b.bs||0)/net.base_mva));});
+  return {Y, idx};
+}
+function buildYbusLF(net){ // load-flow Ybus: NO generator internal reactance (gens are ideal sources at PV/slack buses)
+  const idx=buildIndex(net.buses), n=net.buses.length, Y=zeros(n);
+  net.branches.forEach(br=>{const f=idx[br.f], t=idx[br.t], tap=br.tap||1.0;
+    const z=C(br.r,br.x), y=cInv(z), bc=C(0,(br.b||0)/2);
+    const yft=cDiv(cAdd(y,bc),C(tap*tap,0));
+    Y[f][f]=cAdd(Y[f][f], yft); Y[t][t]=cAdd(Y[t][t], y);
+    const yc=cDiv(y,C(tap,0)); Y[f][t]=cSub(Y[f][t],yc); Y[t][f]=cSub(Y[t][f],yc);});
+  net.buses.forEach((b,i)=>{Y[i][i]=cAdd(Y[i][i], C((b.gs||0)/net.base_mva,(b.bs||0)/net.base_mva));});
+  return {Y, idx};
+}
+function buildYbusSeq(net, seq){ // seq: 0 or 2 (seq1 handled by buildYbusPos)
+  const idx=buildIndex(net.buses), n=net.buses.length, Y=zeros(n);
+  net.branches.forEach(br=>{const f=idx[br.f], t=idx[br.t], tap=br.tap||1.0;
+    const isXfmr=!!(br.tap && br.tap!==0);
+    let r,x;
+    if(seq===0){const k=isXfmr?1.0:3.0; r=br.r0!==undefined?br.r0:k*br.r; x=br.x0!==undefined?br.x0:k*br.x;}
+    else {r=br.r; x=br.x;}
+    const z=C(r,x), y=cInv(z);
+    Y[f][f]=cAdd(Y[f][f], y); Y[t][t]=cAdd(Y[t][t], y);
+    Y[f][t]=cSub(Y[f][t],y); Y[t][f]=cSub(Y[t][f],y);});
+  net.gens.forEach(g=>{const i=idx[g.bus]; const x1=g.xd2*net.base_mva/(g.mva||net.base_mva);
+    if(seq===2){const x2=g.x2!==undefined?g.x2:x1; Y[i][i]=cAdd(Y[i][i], cInv(C(0,x2)));}
+    else {const xn=g.xn!==undefined?g.xn:0; if(g.xn!==null){const x0=g.x0!==undefined?g.x0:0.5*x1;
+      Y[i][i]=cAdd(Y[i][i], cInv(C(0,x0+3*xn)));}}});
+  for(let i=0;i<n;i++) Y[i][i]=cAdd(Y[i][i], C(1e-9,0)); // avoid singular matrix for floating zero-seq buses
+  return {Y, idx};
+}
+
+/* ===================== Load flow (Newton-Raphson, polar form) ===================== */
+function loadFlow(net, tol=1e-8, maxIter=25){
+  const {Y, idx}=buildYbusLF(net); const n=net.buses.length;
+  const type=net.buses.map(b=>b.type); // 1=PQ,2=PV,3=Slack
+  let Vm=net.buses.map(b=>b.vm), Va=net.buses.map(b=>b.va*Math.PI/180);
+  const Pd=net.buses.map(b=>b.pd/net.base_mva), Qd=net.buses.map(b=>b.qd/net.base_mva);
+  const Pg=new Array(n).fill(0), Qfix=new Array(n).fill(0);
+  net.gens.forEach(g=>{Pg[idx[g.bus]]+=g.pg/net.base_mva;});
+  const G=Y.map(row=>row.map(v=>v.re)), B=Y.map(row=>row.map(v=>v.im));
+  const pvpq=[], pq=[]; type.forEach((t,i)=>{if(t!==3) pvpq.push(i); if(t===1) pq.push(i);});
+  let it=0, err=Infinity;
+  for(it=1; it<=maxIter; it++){
+    const P=new Array(n).fill(0), Q=new Array(n).fill(0);
+    for(let i=0;i<n;i++){let p=0,q=0; for(let k=0;k<n;k++){
+      const ang=Va[i]-Va[k], c=Math.cos(ang), s=Math.sin(ang);
+      p += Vm[k]*(G[i][k]*c + B[i][k]*s); q += Vm[k]*(G[i][k]*s - B[i][k]*c);}
+      P[i]=Vm[i]*p; Q[i]=Vm[i]*q;}
+    const Pspec=P.map((_,i)=>Pg[i]-Pd[i]), Qspec=Q.map((_,i)=>Qfix[i]-Qd[i]);
+    const mis=[]; pvpq.forEach(i=>mis.push(Pspec[i]-P[i])); pq.forEach(i=>mis.push(Qspec[i]-Q[i]));
+    err=Math.max(...mis.map(Math.abs));
+    if(err<tol) break;
+    const m=pvpq.length, mm=pq.length, N=m+mm, J=Array.from({length:N},()=>new Array(N).fill(0));
+    for(let a=0;a<m;a++){const i=pvpq[a];
+      for(let bIdx=0;bIdx<m;bIdx++){const k=pvpq[bIdx];
+        if(i!==k){const ang=Va[i]-Va[k]; J[a][bIdx]=Vm[i]*Vm[k]*(G[i][k]*Math.sin(ang)-B[i][k]*Math.cos(ang));}
+        else J[a][bIdx]=-Q[i]-B[i][i]*Vm[i]*Vm[i];}
+      for(let bIdx=0;bIdx<mm;bIdx++){const k=pq[bIdx];
+        if(i!==k){const ang=Va[i]-Va[k]; J[a][m+bIdx]=Vm[i]*(G[i][k]*Math.cos(ang)+B[i][k]*Math.sin(ang));}
+        else J[a][m+bIdx]=P[i]/Vm[i]+G[i][i]*Vm[i];}}
+    for(let a=0;a<mm;a++){const i=pq[a];
+      for(let bIdx=0;bIdx<m;bIdx++){const k=pvpq[bIdx];
+        if(i!==k){const ang=Va[i]-Va[k]; J[m+a][bIdx]=-Vm[i]*Vm[k]*(G[i][k]*Math.cos(ang)+B[i][k]*Math.sin(ang));}
+        else J[m+a][bIdx]=P[i]-G[i][i]*Vm[i]*Vm[i];}
+      for(let bIdx=0;bIdx<mm;bIdx++){const k=pq[bIdx];
+        if(i!==k){const ang=Va[i]-Va[k]; J[m+a][m+bIdx]=Vm[i]*(G[i][k]*Math.sin(ang)-B[i][k]*Math.cos(ang));}
+        else J[m+a][m+bIdx]=Q[i]/Vm[i]-B[i][i]*Vm[i];}}
+    const dx=solveReal(J,N,mis);
+    pvpq.forEach((i,a)=>Va[i]+=dx[a]); pq.forEach((i,a)=>Vm[i]+=dx[m+a]);
+  }
+  const P=new Array(n).fill(0), Q=new Array(n).fill(0);
+  for(let i=0;i<n;i++){let p=0,q=0; for(let k=0;k<n;k++){const ang=Va[i]-Va[k], c=Math.cos(ang), s=Math.sin(ang);
+    p+=Vm[k]*(G[i][k]*c+B[i][k]*s); q+=Vm[k]*(G[i][k]*s-B[i][k]*c);} P[i]=Vm[i]*p; Q[i]=Vm[i]*q;}
+  const PgenMW=P.map((p,i)=>(p+Pd[i])*net.base_mva), QgenMVAr=Q.map((q,i)=>(q+Qd[i])*net.base_mva);
+  return {converged: err<tol, iterations: it, mismatch: err, Vm, Va, PgenMW, QgenMVAr,
+    lossMW: PgenMW.reduce((s,p)=>s+p,0) - net.buses.reduce((s,b)=>s+b.pd,0)};
+}
+
+/* ===================== Short circuit (sequence networks) ===================== */
+function shortCircuit(net, busId, ftype, c=1.1){
+  const {Y:Y1, idx}=buildYbusPos(net); const {Y:Y2}=buildYbusSeq(net,2); const {Y:Y0}=buildYbusSeq(net,0);
+  const Z1=complexInverse(Y1), Z2=complexInverse(Y2), Z0=complexInverse(Y0);
+  const k=idx[busId]; const z1=Z1[k][k], z2=Z2[k][k], z0=Z0[k][k];
+  const Vf=C(c,0); let I1,I2,I0;
+  if(ftype==="3ph"){I1=cDiv(Vf,z1); I2=C(0,0); I0=C(0,0);}
+  else if(ftype==="LG"){I1=cDiv(Vf,cAdd(cAdd(z1,z2),z0)); I2=I1; I0=I1;}
+  else if(ftype==="LL"){I1=cDiv(Vf,cAdd(z1,z2)); I2=cNeg(I1); I0=C(0,0);}
+  else {const zg=z0; I1=cDiv(Vf,cAdd(z1,cDiv(cMul(z2,zg),cAdd(z2,zg))));
+    I2=cNeg(cMul(I1,cDiv(zg,cAdd(z2,zg)))); I0=cNeg(cMul(I1,cDiv(z2,cAdd(z2,zg))));}
+  const A=cExp(2*Math.PI/3);
+  const abc=(s0,s1,s2)=>[cAdd(cAdd(s0,s1),s2), cAdd(cAdd(s0,cMul(cMul(A,A),s1)),cMul(A,s2)), cAdd(cAdd(s0,cMul(A,s1)),cMul(cMul(A,A),s2))];
+  const Iabc=abc(I0,I1,I2);
+  const kv=net.buses[k].kv||1.0, ibase=net.base_mva/(Math.sqrt(3)*kv);
+  const IkA=Iabc.map(v=>cAbs(v)*ibase);
+  return {bus:busId, type:ftype, IkA, Ik_kA: Math.max(...IkA), threeI0_kA: 3*cAbs(I0)*ibase, z1};
+}
+const FAULT_TYPES=["3ph","LG","LL","LLG"];
+
+/* ===================== Breaker duty ===================== */
+function kappa(rOverX){return Math.min(1.02+0.98*Math.exp(-3.0*rOverX), 2.0);}
+function breakerDuty(net, cb){
+  const results=FAULT_TYPES.map(t=>shortCircuit(net, cb.bus, t));
+  const worst=results.reduce((a,b)=>b.Ik_kA>a.Ik_kA?b:a);
+  const rx=Math.abs(worst.z1.re/worst.z1.im);
+  const ip=kappa(rx)*Math.SQRT2*worst.Ik_kA;
+  const busKv=(net.buses.find(b=>b.id===cb.bus)||{}).kv||0;
+  const kvOk=(cb.rated_kv||0) >= busKv;
+  const breakUtil=100*worst.Ik_kA/cb.rated_break_kA, makeUtil=100*ip/cb.rated_make_kA;
+  const pass=kvOk && breakUtil<=100 && makeUtil<=100;
+  return {id:cb.id, bus:cb.bus, fault:worst.type, Ik_kA:worst.Ik_kA, ip_kA:ip, breakUtil, makeUtil, kvOk, pass};
+}
+
+/* ===================== Protection (IEC inverse-time curves) ===================== */
+const IEC_CURVES={NI:[0.14,0.02], VI:[13.5,1.0], EI:[80.0,2.0], LTI:[120.0,1.0]};
+function relayOperatingTime(I_A, pickup_A, curve, dial, inst_A){
+  if(inst_A && inst_A>0 && I_A>=inst_A) return 0.02;
+  if(I_A<=pickup_A) return Infinity;
+  const [k,a]=IEC_CURVES[curve]||IEC_CURVES.VI;
+  return dial*k/(Math.pow(I_A/pickup_A,a)-1);
+}
+function relayClearingTime(cb, I_A){
+  return relayOperatingTime(I_A, cb.relay_pickup_A ?? 300, cb.relay_curve ?? "VI", cb.relay_dial ?? 0.2, cb.relay_inst_A ?? 0) + (cb.breaker_time_s ?? 0.05);
+}
+
+/* ===================== Arc flash (simplified educational approximation of IEEE 1584-2018) ===================== */
+const _IARC={"VCB_LV":[-0.153,-0.097],"VCB_MV":[-0.097,-0.036]};
+const _EN={"VCB":{k1:0.753364,k2:0.566,b:1.081517,c:0.0011}};
+function arcingCurrentKA(Ibf_kA, gap_mm, kv){
+  const key = kv<1 ? "VCB_LV" : "VCB_MV";
+  const [k2,k3]=_IARC[key];
+  const ratio=Math.exp(k2*Math.log10(gap_mm)+k3*Math.log10(Ibf_kA));
+  return Ibf_kA*Math.min(Math.max(ratio,0.3),1.0);
+}
+function incidentEnergyCal(Iarc_kA, t_s, D_mm, kv, box_mm){
+  const p=_EN.VCB, box=box_mm || (kv<1?660:508), Cf=kv<1?1.5:1.0;
+  return Math.max(Cf*Math.pow(10,p.k1)*Math.pow(Iarc_kA,p.k2)*(t_s/0.2)*Math.pow(D_mm/box,-p.b)*p.c*1000, 0.01);
+}
+function afbMM(Ibf_kA, gap_mm, kv, t_s, targetCal=1.2){
+  const f=D=>{const Iarc=arcingCurrentKA(Ibf_kA,gap_mm,kv); return incidentEnergyCal(Iarc,t_s,D,kv)-targetCal;};
+  let lo=50, hi=20000;
+  if(f(hi)>0) return Infinity; // energy still exceeds target even at 20m
+  for(let i=0;i<60;i++){const mid=(lo+hi)/2; if(f(mid)>0) lo=mid; else hi=mid;}
+  return (lo+hi)/2;
+}
+function ppeCategory(E_cal){
+  if(E_cal<=1.2) return {cat:0,label:"AR-rated daily wear (Cat 0)"};
+  if(E_cal<=4) return {cat:1,label:"PPE Category 1 (4 cal/cm\u00b2)"};
+  if(E_cal<=8) return {cat:2,label:"PPE Category 2 (8 cal/cm\u00b2)"};
+  if(E_cal<=25) return {cat:3,label:"PPE Category 3 (25 cal/cm\u00b2)"};
+  if(E_cal<=40) return {cat:4,label:"PPE Category 4 (40 cal/cm\u00b2)"};
+  return {cat:null,label:"DANGER: exceeds 40 cal/cm\u00b2 -- de-energize / remote switching required"};
+}
+
+/* ===================== Transient stability (classical model, RK4, Kron-reduced network) ===================== */
+function zerosMN(r,c){return Array.from({length:r},()=>Array.from({length:c},()=>C(0,0)));}
+function cMatMul(A,B){const r=A.length, inner=B.length, c=B[0].length, R=zerosMN(r,c);
+  for(let i=0;i<r;i++) for(let k=0;k<inner;k++){ if(A[i][k].re===0&&A[i][k].im===0) continue;
+    for(let j=0;j<c;j++) R[i][j]=cAdd(R[i][j], cMul(A[i][k],B[k][j])); }
+  return R;}
+function cMatVec(Y,V){const n=Y.length, r=new Array(n);
+  for(let i=0;i<n;i++){let s=C(0,0); for(let k=0;k<n;k++) s=cAdd(s,cMul(Y[i][k],V[k])); r[i]=s;} return r;}
+function kronReduce(net, branchesOverride, faultBusIdx, faultZ, genBuses, xdpList, loadS, Vsrc){
+  const netTmp={...net, branches: branchesOverride ?? net.branches};
+  const {Y, idx}=buildYbusLF(netTmp); const n=net.buses.length, ng=genBuses.length;
+  const Yaug=Y.map(row=>row.map(v=>C(v.re,v.im)));
+  net.buses.forEach((b,i)=>{ if(Math.abs(loadS[i].re)>1e-9||Math.abs(loadS[i].im)>1e-9){
+    const v2=Vsrc[i].re*Vsrc[i].re+Vsrc[i].im*Vsrc[i].im; Yaug[i][i]=cAdd(Yaug[i][i], cDiv(cConj(loadS[i]),C(v2,0))); }});
+  if(faultBusIdx!=null) Yaug[faultBusIdx][faultBusIdx]=cAdd(Yaug[faultBusIdx][faultBusIdx], cInv(faultZ));
+  const Yfull=zerosMN(n+ng,n+ng);
+  for(let i=0;i<n;i++) for(let j=0;j<n;j++) Yfull[i][j]=Yaug[i][j];
+  genBuses.forEach((gb,k)=>{const gi=idx[gb], y=cInv(C(0,xdpList[k]));
+    Yfull[n+k][n+k]=cAdd(Yfull[n+k][n+k],y); Yfull[gi][gi]=cAdd(Yfull[gi][gi],y);
+    Yfull[n+k][gi]=cSub(Yfull[n+k][gi],y); Yfull[gi][n+k]=cSub(Yfull[gi][n+k],y);});
+  const Yee=Yfull.slice(0,n).map(r=>r.slice(0,n));
+  const Yeg=Yfull.slice(0,n).map(r=>r.slice(n));
+  const Yge=Yfull.slice(n).map(r=>r.slice(0,n));
+  const Ygg=Yfull.slice(n).map(r=>r.slice(n));
+  const ZeeYeg=cMatMul(complexInverse(Yee), Yeg);
+  const YgeZeeYeg=cMatMul(Yge, ZeeYeg);
+  const Ymod=zerosMN(ng,ng);
+  for(let i=0;i<ng;i++) for(let j=0;j<ng;j++) Ymod[i][j]=cSub(Ygg[i][j], YgeZeeYeg[i][j]);
+  return {Ymod, idx};
+}
+function runStability(net, lf, gens, faultBusId, clearTime, tripBranchId, tEnd, dt){
+  const ng=gens.length, fbase=50.0, ws=2*Math.PI*fbase;
+  const {Y:Ybase, idx}=buildYbusLF(net);
+  const V=net.buses.map((b,i)=>C(lf.Vm[i]*Math.cos(lf.Va[i]), lf.Vm[i]*Math.sin(lf.Va[i])));
+  const Sd=net.buses.map(b=>C(b.pd/net.base_mva, b.qd/net.base_mva));
+  const YV=cMatVec(Ybase,V);
+  const delta0=new Array(ng), Eq0=new Array(ng), Pm0=new Array(ng), xdpList=gens.map(g=>g.xd2);
+  gens.forEach((g,k)=>{const gi=idx[g.bus]; const Sg=cAdd(cMul(V[gi],cConj(YV[gi])), Sd[gi]);
+    const Ig=cConj(cDiv(Sg,V[gi])); const Ep=cAdd(V[gi], cMul(C(0,g.xd2), Ig));
+    delta0[k]=Math.atan2(Ep.im,Ep.re); Eq0[k]=cAbs(Ep); Pm0[k]=Sg.re;});
+  const genBuses=gens.map(g=>g.bus);
+  const flatV=net.buses.map(()=>C(1,0));
+  const faultBusIdx=idx[faultBusId];
+  const {Ymod:YfaultMod}=kronReduce(net, null, faultBusIdx, C(1e-6,0), genBuses, xdpList, Sd, flatV);
+  let postBranches=net.branches;
+  if(tripBranchId) postBranches=net.branches.filter(br=>br.id!==tripBranchId);
+  const {Ymod:YpostMod}=kronReduce(net, postBranches, null, null, genBuses, xdpList, Sd, flatV);
+  function Pe(delta,Ymod){const Ep=delta.map((d,k)=>cMul(C(Eq0[k],0),cExp(d)));
+    const Ig=cMatVec(Ymod,Ep); return Ep.map((e,k)=>cMul(e,cConj(Ig[k])).re);}
+  function deriv(t,x){const delta=x.slice(0,ng), domega=x.slice(ng,2*ng);
+    const Ymod = t<clearTime ? YfaultMod : YpostMod;
+    const Pe_=Pe(delta,Ymod);
+    const dDelta=domega.map(w=>ws*w);
+    const dOmega=domega.map((w,k)=>(Pm0[k]-Pe_[k]-gens[k].D*w)/(2*gens[k].H));
+    return dDelta.concat(dOmega);}
+  let x=delta0.concat(new Array(ng).fill(0));
+  const nSteps=Math.round(tEnd/dt); const ts=[], deltaHist=[];
+  ts.push(0); deltaHist.push(x.slice(0,ng));
+  for(let i=1;i<=nSteps;i++){const t=(i-1)*dt;
+    const k1=deriv(t,x), k2=deriv(t+dt/2, x.map((v,j)=>v+dt/2*k1[j]));
+    const k3=deriv(t+dt/2, x.map((v,j)=>v+dt/2*k2[j])), k4=deriv(t+dt, x.map((v,j)=>v+dt*k3[j]));
+    x=x.map((v,j)=>v+dt/6*(k1[j]+2*k2[j]+2*k3[j]+k4[j]));
+    ts.push(i*dt); deltaHist.push(x.slice(0,ng));}
+  const deltaDeg=deltaHist.map(row=>row.map(d=>d*180/Math.PI));
+  let maxSpread=0; deltaDeg.forEach(row=>{const mean=row.reduce((s,v)=>s+v,0)/ng;
+    const spread=Math.max(...row.map(v=>v-mean))-Math.min(...row.map(v=>v-mean)); if(spread>maxSpread) maxSpread=spread;});
+  return {ts, deltaDeg, delta0Deg:delta0.map(d=>d*180/Math.PI), maxSpread, stable: maxSpread<180};
+}
+
+/* ===================== Equipment library (typical/illustrative catalog values) ===================== */
+const LIBRARY = {
+  lines: [
+    {name:"11kV OH Line - Rabbit ACSR", kv:11, r:0.5524, x:0.372},
+    {name:"11kV Cable - 3x1c 95mm\u00b2 Cu XLPE", kv:11, r:0.247, x:0.081},
+    {name:"11kV Cable - 3x1c 185mm\u00b2 Cu XLPE", kv:11, r:0.128, x:0.075},
+    {name:"33kV OH Line - Dog ACSR", kv:33, r:0.2792, x:0.379},
+    {name:"33kV Cable - 3x1c 300mm\u00b2 Al XLPE", kv:33, r:0.100, x:0.110},
+    {name:"132kV OH Line - Zebra ACSR", kv:132, r:0.0693, x:0.401},
+    {name:"132kV Cable - 3x1c 630mm\u00b2 Cu XLPE", kv:132, r:0.0283, x:0.130},
+  ],
+  transformers: [
+    {name:"1 MVA 11/0.433kV Dyn11", mva:1, z_pct:4.75, xr:8},
+    {name:"2.5 MVA 11/0.433kV Dyn11", mva:2.5, z_pct:6.0, xr:10},
+    {name:"5 MVA 33/11kV Dyn11", mva:5, z_pct:8.0, xr:12},
+    {name:"10 MVA 33/11kV Dyn11", mva:10, z_pct:9.0, xr:15},
+    {name:"20 MVA 132/33kV YNyn0", mva:20, z_pct:10.0, xr:20},
+    {name:"31.5 MVA 132/33kV YNd11", mva:31.5, z_pct:12.5, xr:25},
+  ],
+  generators: [
+    {name:"1 MVA Diesel Genset", mva:1, xd2:0.18, H:1.5},
+    {name:"5 MVA Diesel Genset", mva:5, xd2:0.15, H:2.0},
+    {name:"25 MVA Steam Turbine", mva:25, xd2:0.20, H:3.5},
+    {name:"100 MVA Steam Turbine", mva:100, xd2:0.22, H:5.0},
+    {name:"200 MVA Hydro Generator", mva:200, xd2:0.30, H:4.0},
+  ],
+  breakers: [
+    {name:"12kV VCB 630A 20kA", rated_kv:12, rated_break_kA:20, rated_make_kA:50},
+    {name:"12kV VCB 1250A 25kA", rated_kv:12, rated_break_kA:25, rated_make_kA:63},
+    {name:"12kV VCB 2000A 31.5kA", rated_kv:12, rated_break_kA:31.5, rated_make_kA:80},
+    {name:"36kV VCB 1250A 25kA", rated_kv:36, rated_break_kA:25, rated_make_kA:63},
+    {name:"36kV VCB 2000A 31.5kA", rated_kv:36, rated_break_kA:31.5, rated_make_kA:80},
+    {name:"145kV SF6 CB 2000A 40kA", rated_kv:145, rated_break_kA:40, rated_make_kA:100},
+  ]
+};
+function applyLinePreset(br, presetIdx, lengthKm, baseMva){
+  const p=LIBRARY.lines[presetIdx]; if(!p) return;
+  const Zbase=(p.kv*p.kv)/baseMva;
+  br.r=+((p.r*lengthKm)/Zbase).toFixed(6); br.x=+((p.x*lengthKm)/Zbase).toFixed(6);
+  br.tap=0; br.libraryLine=presetIdx; br.length_km=lengthKm;
+}
+function applyXfmrPreset(br, presetIdx, baseMva){
+  const p=LIBRARY.transformers[presetIdx]; if(!p) return;
+  const Zpu=(p.z_pct/100)*(baseMva/p.mva);
+  const R=Zpu/Math.sqrt(1+p.xr*p.xr), X=R*p.xr;
+  br.r=+R.toFixed(6); br.x=+X.toFixed(6); if(!br.tap) br.tap=1.0; br.libraryXfmr=presetIdx;
+}
+function applyGenPreset(g, presetIdx){
+  const p=LIBRARY.generators[presetIdx]; if(!p) return;
+  g.mva=p.mva; g.xd2=p.xd2; g.H=p.H; g.libraryGen=presetIdx;
+}
+function applyBrkPreset(cb, presetIdx){
+  const p=LIBRARY.breakers[presetIdx]; if(!p) return;
+  cb.rated_kv=p.rated_kv; cb.rated_break_kA=p.rated_break_kA; cb.rated_make_kA=p.rated_make_kA; cb.libraryBrk=presetIdx;
+}
+
+/* ===================== Report rendering ===================== */
+function renderLoadFlowTab(){
+  const wrap=document.getElementById("reportWrap");
+  if(state.buses.length===0){wrap.innerHTML='<div class="card"><div class="empty">No network yet. Build one in the Diagram tab, or click "Load Demo Network".</div></div>'; return;}
+  if(!state.buses.some(b=>b.type===3)){wrap.innerHTML='<div class="card"><div class="empty">No Slack bus (type = 3) defined. Set exactly one bus to type 3 in the Diagram tab.</div></div>'; return;}
+  try{
+    const res=loadFlow(state);
+    let rows=state.buses.map((b,i)=>`<tr><td>${b.label||b.id}</td><td>${res.Vm[i].toFixed(4)}</td><td>${(res.Va[i]*180/Math.PI).toFixed(3)}</td><td>${res.PgenMW[i].toFixed(2)}</td><td>${res.QgenMVAr[i].toFixed(2)}</td></tr>`).join("");
+    wrap.innerHTML=`<div class="card"><h2>Load Flow (Newton-Raphson)</h2>
+      <p>${res.converged?`<span class="pass">Converged</span>`:`<span class="fail">Did NOT converge</span>`} in ${res.iterations} iterations, mismatch ${res.mismatch.toExponential(2)}. Total losses: ${res.lossMW.toFixed(3)} MW.</p>
+      <table><thead><tr><th>Bus</th><th>|V| pu</th><th>Angle deg</th><th>Pgen MW</th><th>Qgen MVAr</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="warn">Note: this in-browser engine does not enforce generator Q-limits (no PV→PQ switching) -- use the Python powersys.py engine for that.</p></div>`;
+  }catch(e){wrap.innerHTML=`<div class="card"><div class="empty">Load flow error: ${e.message}</div></div>`;}
+}
+function renderShortCircuitTab(){
+  const wrap=document.getElementById("reportWrap");
+  if(state.buses.length===0){wrap.innerHTML='<div class="card"><div class="empty">No network yet.</div></div>'; return;}
+  try{
+    let rows=state.buses.map(b=>{
+      const r=FAULT_TYPES.map(t=>shortCircuit(state,b.id,t).Ik_kA.toFixed(3));
+      return `<tr><td>${b.label||b.id}</td><td>${b.kv||1}</td><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`;}).join("");
+    wrap.innerHTML=`<div class="card"><h2>Short Circuit (IEC 60909 style, c=1.1)</h2>
+      <table><thead><tr><th>Bus</th><th>kV</th><th>3ph kA</th><th>LG kA</th><th>LL kA</th><th>LLG kA</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="warn">Simplifications: default X0=3·X1 (lines) / X1 (transformers), generators solidly grounded (X0=0.5·X1), no motor contribution, no near-generator current decay (μ factor). Use the Python shortcircuit.py for full control over grounding/zero-sequence data.</p></div>`;
+  }catch(e){wrap.innerHTML=`<div class="card"><div class="empty">Short-circuit error: ${e.message}</div></div>`;}
+}
+function renderBreakerDutyTab(){
+  const wrap=document.getElementById("reportWrap");
+  if(state.breakers.length===0){wrap.innerHTML='<div class="card"><div class="empty">No breakers placed yet. Use "+ Breaker" in the Diagram tab.</div></div>'; return;}
+  try{
+    let rows=state.breakers.map(cb=>{const d=breakerDuty(state,cb);
+      return `<tr><td>${d.id}</td><td>${d.bus}</td><td>${d.fault}</td><td>${d.Ik_kA.toFixed(2)}</td><td>${d.ip_kA.toFixed(2)}</td><td>${d.breakUtil.toFixed(0)}%</td><td>${d.makeUtil.toFixed(0)}%</td><td class="${d.pass?'pass':'fail'}">${d.pass?'PASS':'FAIL'}${d.kvOk?'':' (kV!)'}</td></tr>`;}).join("");
+    wrap.innerHTML=`<div class="card"><h2>Breaker Duty Check</h2>
+      <table><thead><tr><th>Breaker</th><th>Bus</th><th>Worst fault</th><th>Ik'' kA</th><th>ip kA</th><th>Break%</th><th>Make%</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="warn">Simplified Ib ≈ Ik'' (no near-generator decay applied) -- conservative estimate. Use breakerduty.py for the full IEC μ-factor calculation.</p></div>`;
+  }catch(e){wrap.innerHTML=`<div class="card"><div class="empty">Breaker duty error: ${e.message}</div></div>`;}
+}
+
+function renderProtectionTab(){
+  const wrap=document.getElementById("reportWrap");
+  const withRelay=state.breakers.filter(cb=>cb.relay_pickup_A);
+  if(withRelay.length===0){wrap.innerHTML='<div class="card"><div class="empty">No breakers with relay settings yet. Select a breaker in the Diagram tab and set its pickup/curve/dial (defaults appear once you open the panel -- change any field to save them).</div></div>'; return;}
+  let rows="";
+  withRelay.forEach(cb=>{
+    let Ibf_kA=0;
+    try{ Ibf_kA=Math.max(...FAULT_TYPES.map(t=>shortCircuit(state,cb.bus,t).Ik_kA)); }catch(e){}
+    const t=relayClearingTime(cb, Ibf_kA*1000);
+    rows+=`<tr><td>${cb.id}</td><td>${cb.bus}</td><td>${Ibf_kA.toFixed(2)}</td><td>${isFinite(t)?t.toFixed(3):"no trip"}</td></tr>`;
+  });
+  const cvsId="tccCanvas";
+  wrap.innerHTML=`<div class="card"><h2>Protection / Time-Current Curves</h2>
+    <table><thead><tr><th>Breaker</th><th>Bus</th><th>Fault Ik'' kA</th><th>Clearing time (s)</th></tr></thead><tbody>${rows}</tbody></table>
+    <canvas id="${cvsId}" width="760" height="480" style="max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:10px"></canvas>
+    <p class="hint">Log-log plot: current (50 A - 50 kA) vs time (0.01 - 100 s). Check visually that downstream (feeder) curves sit to the left of / below upstream curves with margin -- that is how coordination is verified in practice.</p>
+    <p class="warn">Educational approximation: only IEC inverse-time curves (NI/VI/EI/LTI) are modeled here; no fuse tables or IEEE curves. Use protection.py for those.</p></div>`;
+  drawTCC(document.getElementById(cvsId), withRelay);
+}
+function drawTCC(canvas, breakers){
+  const ctx=canvas.getContext("2d"); const W=canvas.width,H=canvas.height, pad=50;
+  const xMin=Math.log10(50), xMax=Math.log10(50000), yMin=Math.log10(0.01), yMax=Math.log10(100);
+  const X=v=>pad+(Math.log10(v)-xMin)/(xMax-xMin)*(W-2*pad);
+  const Y=v=>H-pad-(Math.log10(v)-yMin)/(yMax-yMin)*(H-2*pad);
+  const css=getComputedStyle(document.documentElement);
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle=css.getPropertyValue("--line"); ctx.fillStyle=css.getPropertyValue("--text"); ctx.font="10px sans-serif";
+  ctx.strokeRect(pad,pad,W-2*pad,H-2*pad);
+  for(let d=100;d<=50000;d*=10){ctx.beginPath();ctx.moveTo(X(d),pad);ctx.lineTo(X(d),H-pad);ctx.stroke();ctx.fillText(d+"A",X(d)-10,H-pad+14);}
+  for(let d=0.01;d<=100;d*=10){ctx.beginPath();ctx.moveTo(pad,Y(d));ctx.lineTo(W-pad,Y(d));ctx.stroke();ctx.fillText(d+"s",4,Y(d)+3);}
+  const colors=["#2563eb","#dc2626","#16a34a","#f59e0b","#7c3aed","#0891b2"];
+  breakers.forEach((cb,i)=>{
+    ctx.strokeStyle=colors[i%colors.length]; ctx.lineWidth=2; ctx.beginPath(); let started=false;
+    for(let lx=xMin;lx<=xMax;lx+=0.02){const I=Math.pow(10,lx); const t=relayClearingTime(cb,I);
+      if(!isFinite(t)||t<=0) continue; const py=Y(Math.max(0.01,Math.min(100,t)));
+      if(!started){ctx.moveTo(X(I),py); started=true;} else ctx.lineTo(X(I),py);}
+    ctx.stroke();
+    ctx.fillStyle=colors[i%colors.length]; ctx.fillText(cb.id, W-pad-60, pad+14+i*13);
+  });
+}
+function renderArcFlashTab(){
+  const wrap=document.getElementById("reportWrap");
+  if(state.buses.length===0){wrap.innerHTML='<div class="card"><div class="empty">No network yet.</div></div>'; return;}
+  let rows="";
+  state.buses.forEach(b=>{
+    let Ibf_kA=0; try{Ibf_kA=shortCircuit(state,b.id,"3ph").Ik_kA;}catch(e){}
+    const cb=state.breakers.find(x=>x.bus===b.id && x.relay_pickup_A);
+    const t = cb ? relayClearingTime(cb, Ibf_kA*1000) : 0.2; // default 0.2s if no relay modeled at this bus
+    const gap=b.gap_mm ?? (b.kv<1?32:104), D=b.D_mm ?? 455;
+    const Iarc=arcingCurrentKA(Ibf_kA, gap, b.kv||1);
+    const E=incidentEnergyCal(Iarc, isFinite(t)?t:0.2, D, b.kv||1);
+    const afb=afbMM(Ibf_kA, gap, b.kv||1, isFinite(t)?t:0.2);
+    const ppe=ppeCategory(E);
+    let warn="";
+    if(!(0.208<=(b.kv||1)&&(b.kv||1)<=15)) warn='<div class="warn">kV outside IEEE 1584 validated range (0.208-15kV)</div>';
+    rows+=`<tr><td>${b.label||b.id}</td><td>${(b.kv||1).toFixed(2)}</td><td>${Ibf_kA.toFixed(2)}</td><td>${Iarc.toFixed(2)}</td><td>${(isFinite(t)?t:0.2).toFixed(3)}</td><td>${E.toFixed(2)}</td><td>${isFinite(afb)?afb.toFixed(0):">20000"}</td><td>${ppe.label}${warn}</td></tr>`;
+  });
+  wrap.innerHTML=`<div class="card"><h2>Arc Flash (simplified IEEE 1584-2018 style)</h2>
+    <table><thead><tr><th>Bus</th><th>kV</th><th>Ibf kA</th><th>Iarc kA</th><th>t s</th><th>E cal/cm\u00b2</th><th>AFB mm</th><th>PPE</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="warn"><b>Important:</b> this is a simplified educational approximation, NOT the certified IEEE 1584-2018 equations (those have ~20 coefficients per equipment class/voltage and are copyrighted). Do not use these numbers for real PPE selection -- use a validated tool or the licensed standard. Set each bus's arc gap and working distance in its properties panel (Diagram tab) for more realistic numbers; if a bus has no breaker with relay settings, a default 0.2s clearing time is assumed.</p></div>`;
+}
+
+function renderStabilityTab(){
+  const wrap=document.getElementById("reportWrap");
+  const gens=state.gens.filter(g=>g.H || true).map(g=>({...g, H: g.H ?? 4.0, D: g.D ?? 2.0}));
+  if(!state.buses.some(b=>b.type===3) || gens.length===0){
+    wrap.innerHTML='<div class="card"><div class="empty">Need at least one Slack bus and one generator.</div></div>'; return;}
+  const busOpts=state.buses.map(b=>`<option value="${b.id}">${b.label||b.id}</option>`).join("");
+  const branchOpts='<option value="">(none)</option>'+state.branches.map(br=>`<option value="${br.id}">${br.id} (bus ${br.f}-${br.t})</option>`).join("");
+  wrap.innerHTML=`<div class="card"><h2>Transient Stability (classical model, RK4)</h2>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+      <div class="field" style="width:160px"><label>Fault bus</label><select id="stFaultBus">${busOpts}</select></div>
+      <div class="field" style="width:200px"><label>Trip branch at clearing</label><select id="stTripBr">${branchOpts}</select></div>
+      <div class="field" style="width:120px"><label>Clear time (s)</label><input id="stClear" value="0.15"></div>
+      <div class="field" style="width:120px"><label>Sim length (s)</label><input id="stTend" value="2.0"></div>
+      <div class="field" style="width:120px"><label>Time step (s)</label><input id="stDt" value="0.01"></div>
+    </div>
+    <button id="stRun">Run Simulation</button>
+    <div id="stResults" style="margin-top:14px"></div>
+    <p class="warn">Simplification: classical generator model only (constant E' behind X'd) -- no exciter, no governor, no one-axis dynamics. Fixed-timestep RK4. Use stability.py for exciter/governor models and one-axis (E'q) dynamics.</p></div>`;
+  document.getElementById("stRun").onclick=()=>{
+    try{
+      const lf=loadFlow(state);
+      if(!lf.converged){document.getElementById("stResults").innerHTML='<div class="empty">Load flow did not converge -- fix the network first (Load Flow tab).</div>'; return;}
+      const faultBus=Number(document.getElementById("stFaultBus").value);
+      const tripBr=document.getElementById("stTripBr").value || null;
+      const clearTime=parseFloat(document.getElementById("stClear").value);
+      const tEnd=parseFloat(document.getElementById("stTend").value);
+      const dt=parseFloat(document.getElementById("stDt").value);
+      const res=runStability(state, lf, gens, faultBus, clearTime, tripBr, tEnd, dt);
+      let rows=gens.map((g,k)=>`<tr><td>G@bus${g.bus}</td><td>${res.delta0Deg[k].toFixed(1)}</td><td>${res.deltaDeg[res.deltaDeg.length-1][k].toFixed(1)}</td></tr>`).join("");
+      document.getElementById("stResults").innerHTML=`<p>${res.stable?`<span class="pass">STABLE</span>`:`<span class="fail">UNSTABLE (loses synchronism)</span>`} -- max pairwise (COI) angle spread: ${res.maxSpread.toFixed(1)} deg</p>
+        <table><thead><tr><th>Generator</th><th>delta0 deg</th><th>delta_final deg</th></tr></thead><tbody>${rows}</tbody></table>
+        <canvas id="swingCanvas" width="760" height="380" style="max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:8px"></canvas>`;
+      drawSwing(document.getElementById("swingCanvas"), res, gens);
+    }catch(e){document.getElementById("stResults").innerHTML=`<div class="empty">Simulation error: ${e.message}</div>`;}
+  };
+}
+function drawSwing(canvas, res, gens){
+  const ctx=canvas.getContext("2d"); const W=canvas.width,H=canvas.height, pad=45;
+  const tEnd=res.ts[res.ts.length-1];
+  const allVals=res.deltaDeg.flat(); const yMin=Math.min(...allVals)-5, yMax=Math.max(...allVals)+5;
+  const X=t=>pad+t/tEnd*(W-2*pad), Y=v=>H-pad-(v-yMin)/(yMax-yMin)*(H-2*pad);
+  const css=getComputedStyle(document.documentElement);
+  ctx.clearRect(0,0,W,H); ctx.strokeStyle=css.getPropertyValue("--line"); ctx.fillStyle=css.getPropertyValue("--text"); ctx.font="10px sans-serif";
+  ctx.strokeRect(pad,pad,W-2*pad,H-2*pad);
+  for(let i=0;i<=4;i++){const t=tEnd*i/4; ctx.fillText(t.toFixed(2)+"s", X(t)-10, H-pad+14);}
+  for(let i=0;i<=4;i++){const v=yMin+(yMax-yMin)*i/4; ctx.fillText(v.toFixed(0), 4, Y(v)+3);}
+  const colors=["#2563eb","#dc2626","#16a34a","#f59e0b","#7c3aed","#0891b2"];
+  gens.forEach((g,k)=>{ctx.strokeStyle=colors[k%colors.length]; ctx.lineWidth=2; ctx.beginPath();
+    res.ts.forEach((t,i)=>{const py=Y(res.deltaDeg[i][k]); if(i===0) ctx.moveTo(X(t),py); else ctx.lineTo(X(t),py);}); ctx.stroke();
+    ctx.fillStyle=colors[k%colors.length]; ctx.fillText("G@bus"+g.bus, W-pad-70, pad+14+k*13);});
+}
+
+function renderLibraryTab(){
+  const wrap=document.getElementById("reportWrap");
+  const rowsL=LIBRARY.lines.map(p=>`<tr><td>${p.name}</td><td>${p.kv}</td><td>${p.r}</td><td>${p.x}</td></tr>`).join("");
+  const rowsT=LIBRARY.transformers.map(p=>`<tr><td>${p.name}</td><td>${p.mva}</td><td>${p.z_pct}%</td><td>${p.xr}</td></tr>`).join("");
+  const rowsG=LIBRARY.generators.map(p=>`<tr><td>${p.name}</td><td>${p.mva}</td><td>${p.xd2}</td><td>${p.H}</td></tr>`).join("");
+  const rowsB=LIBRARY.breakers.map(p=>`<tr><td>${p.name}</td><td>${p.rated_kv}</td><td>${p.rated_break_kA}</td><td>${p.rated_make_kA}</td></tr>`).join("");
+  wrap.innerHTML=`
+    <div class="card"><h2>Lines &amp; Cables</h2>
+      <table><thead><tr><th>Type</th><th>kV</th><th>R \u03a9/km</th><th>X \u03a9/km</th></tr></thead><tbody>${rowsL}</tbody></table></div>
+    <div class="card"><h2>Transformers</h2>
+      <table><thead><tr><th>Type</th><th>MVA</th><th>Z%</th><th>X/R</th></tr></thead><tbody>${rowsT}</tbody></table></div>
+    <div class="card"><h2>Generators</h2>
+      <table><thead><tr><th>Type</th><th>MVA</th><th>X'd (pu)</th><th>H (MW.s/MVA)</th></tr></thead><tbody>${rowsG}</tbody></table></div>
+    <div class="card"><h2>Circuit Breakers</h2>
+      <table><thead><tr><th>Type</th><th>Rated kV</th><th>Breaking kA</th><th>Making kA</th></tr></thead><tbody>${rowsB}</tbody></table>
+      <p class="warn">These are typical/illustrative catalog values for common equipment classes, not manufacturer-specific datasheets. To use a preset: select a branch, generator, or breaker in the Diagram tab and pick from the "preset" dropdown at the top of its properties panel -- it will auto-fill R/X, X'd, H, or ratings from the nameplate values (line/cable presets also ask for a length in km and convert Ω/km to per-unit automatically using the system base MVA and bus kV).</p></div>`;
+}
+
+/* ===================== Project storage (per-browser, via localStorage) ===================== */
+function listProjects(){ try{ return JSON.parse(localStorage.getItem("powersys_projects")||"{}"); }catch(e){ return {}; } }
+function saveProject(name){ try{ const all=listProjects();
+    all[name]={base_mva:100, buses:state.buses, branches:state.branches, gens:state.gens, breakers:state.breakers,
+      _layout: state.buses.map(b=>({id:b.id,x:b.x,y:b.y,label:b.label}))};
+    localStorage.setItem("powersys_projects", JSON.stringify(all)); return true;
+  }catch(e){ return false; } }
+function deleteProject(name){ try{ const all=listProjects(); delete all[name]; localStorage.setItem("powersys_projects", JSON.stringify(all)); }catch(e){} }
+let currentProjectName="";
+
+function renderDashboardTab(){
+  const wrap=document.getElementById("reportWrap");
+  const projects=Object.keys(listProjects());
+  const projOpts=projects.map(n=>`<option value="${n}"${n===currentProjectName?" selected":""}>${n}</option>`).join("");
+  let html=`<div class="card"><h2>Projects</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="width:220px;margin:0"><label>Project name</label><input id="projName" value="${currentProjectName}"></div>
+      <button id="btnSaveProj">Save Project</button>
+      <div class="field" style="width:220px;margin:0"><label>Saved projects</label><select id="projList"><option value="">-- select --</option>${projOpts}</select></div>
+      <button id="btnLoadProj">Load</button><button id="btnDelProj">Delete</button><button id="btnNewProj">New Project</button>
+    </div>
+    <p class="hint">Projects are saved in this browser only (not shared/synced). Use Export/Import JSON in the header to move a network between devices.</p></div>`;
+
+  html+=`<div class="card"><h2>Network Summary</h2>
+    <div style="display:flex;gap:26px;flex-wrap:wrap;font-size:13px">
+      <div><b>${state.buses.length}</b> buses</div><div><b>${state.branches.length}</b> branches</div>
+      <div><b>${state.gens.length}</b> generators</div><div><b>${state.breakers.length}</b> breakers</div>
+      <div><b>${state.base_mva||100}</b> MVA base</div></div></div>`;
+
+  if(state.buses.length===0){
+    wrap.innerHTML=html+`<div class="card"><div class="empty">No network yet. Go to the Diagram tab and build one, click "Load Demo Network", or load a saved project above.</div></div>`;
+    wireDashboardButtons(); return;
+  }
+
+  // Load flow card
+  html+='<div class="card" style="cursor:pointer" onclick="switchTab(\'lf\')"><h2>⚡ Load Flow</h2>';
+  try{
+    if(!state.buses.some(b=>b.type===3)) html+='<p class="warn">No Slack bus defined.</p>';
+    else{ const lf=loadFlow(state);
+      html+=`<p>${lf.converged?'<span class="pass">Converged</span>':'<span class="fail">Not converged</span>'} in ${lf.iterations} iterations &nbsp;|&nbsp; Total losses: <b>${lf.lossMW.toFixed(2)} MW</b></p>`; }
+  }catch(e){ html+=`<p class="fail">Error: ${e.message}</p>`; }
+  html+='<p class="hint">Click to open full report →</p></div>';
+
+  // Short circuit card
+  html+='<div class="card" style="cursor:pointer" onclick="switchTab(\'sc\')"><h2>🔺 Short Circuit</h2>';
+  try{
+    let maxKA=-1, maxBus=null;
+    state.buses.forEach(b=>{const Ik=shortCircuit(state,b.id,"3ph").Ik_kA; if(Ik>maxKA){maxKA=Ik; maxBus=b;}});
+    html+=`<p>Worst 3-phase fault: <b>${maxKA.toFixed(2)} kA</b> at ${maxBus.label||maxBus.id}</p>`;
+  }catch(e){ html+=`<p class="fail">Error: ${e.message}</p>`; }
+  html+='<p class="hint">Click to open full report →</p></div>';
+
+  // Breaker duty card
+  html+='<div class="card" style="cursor:pointer" onclick="switchTab(\'bd\')"><h2>🛑 Breaker Duty</h2>';
+  if(state.breakers.length===0) html+='<p class="empty">No breakers placed.</p>';
+  else{ try{
+      const results=state.breakers.map(cb=>breakerDuty(state,cb));
+      const fails=results.filter(r=>!r.pass).length;
+      html+=`<p>${fails===0?'<span class="pass">All '+results.length+' breakers PASS</span>':'<span class="fail">'+fails+' of '+results.length+' breakers FAIL</span>'}</p>`;
+    }catch(e){ html+=`<p class="fail">Error: ${e.message}</p>`; } }
+  html+='<p class="hint">Click to open full report →</p></div>';
+
+  // Arc flash card
+  html+='<div class="card" style="cursor:pointer" onclick="switchTab(\'af\')"><h2>🔥 Arc Flash</h2>';
+  try{
+    let worstE=-1, worstBus=null;
+    state.buses.forEach(b=>{
+      const Ibf=shortCircuit(state,b.id,"3ph").Ik_kA;
+      const cb=state.breakers.find(x=>x.bus===b.id && x.relay_pickup_A);
+      const t=cb?relayClearingTime(cb,Ibf*1000):0.2;
+      const gap=b.gap_mm ?? (b.kv<1?32:104), D=b.D_mm ?? 455;
+      const Iarc=arcingCurrentKA(Ibf,gap,b.kv||1);
+      const E=incidentEnergyCal(Iarc, isFinite(t)?t:0.2, D, b.kv||1);
+      if(E>worstE){worstE=E; worstBus=b;}});
+    const ppe=ppeCategory(worstE);
+    html+=`<p>Worst case: <b>${worstE.toFixed(2)} cal/cm\u00b2</b> at ${worstBus.label||worstBus.id} -- ${ppe.label}</p>`;
+  }catch(e){ html+=`<p class="fail">Error: ${e.message}</p>`; }
+  html+='<p class="hint">Click to open full report →</p></div>';
+
+  // Stability card (not auto-run, needs scenario input)
+  html+=`<div class="card" style="cursor:pointer" onclick="switchTab('st')"><h2>📈 Transient Stability</h2>
+    <p>${state.gens.some(g=>g.H)?'Generator inertia data present.':'No inertia (H) set on generators yet -- defaults will be used.'} Pick a fault bus and clearing time in the Stability tab to run a swing simulation.</p>
+    <p class="hint">Click to open →</p></div>`;
+
+  wrap.innerHTML=html;
+  wireDashboardButtons();
+}
+function wireDashboardButtons(){
+  const nameInp=document.getElementById("projName");
+  document.getElementById("btnSaveProj").onclick=()=>{
+    const name=(nameInp.value||"").trim(); if(!name){alert("Enter a project name."); return;}
+    if(saveProject(name)){currentProjectName=name; status.textContent="Saved project '"+name+"'"; renderDashboardTab();}
+    else alert("Could not save (storage unavailable).");
+  };
+  document.getElementById("btnLoadProj").onclick=()=>{
+    const name=document.getElementById("projList").value; if(!name) return;
+    const all=listProjects(); if(all[name]){ loadNetwork(all[name]); currentProjectName=name; status.textContent="Loaded '"+name+"'"; renderDashboardTab(); }
+  };
+  document.getElementById("btnDelProj").onclick=()=>{
+    const name=document.getElementById("projList").value; if(!name) return;
+    if(confirm("Delete project '"+name+"'?")){ deleteProject(name); if(currentProjectName===name) currentProjectName=""; renderDashboardTab(); }
+  };
+  document.getElementById("btnNewProj").onclick=()=>{
+    if(confirm("Start a new blank project? Unsaved changes will be lost.")){
+      state={buses:[],branches:[],gens:[],breakers:[]}; nextBusN=1; selected=null; currentProjectName=""; render(); renderDashboardTab();
+    }
+  };
+}
+
+/* ===================== Demo network (3-bus, matches the Python sld_io.py example) ===================== */
+const DEMO_NETWORK={base_mva:100,
+  buses:[{id:1,type:3,pd:0,qd:0,vm:1.02,va:0,kv:11,bs:0},{id:2,type:2,pd:0,qd:0,vm:1.01,va:0,kv:11,bs:0},
+         {id:3,type:1,pd:40,qd:15,vm:1.0,va:0,kv:11,bs:0}],
+  branches:[{id:"L1-3",f:1,t:3,r:0.02,x:0.08,b:0,tap:0},{id:"L2-3",f:2,t:3,r:0.025,x:0.09,b:0,tap:0}],
+  gens:[{id:"G1",bus:1,pg:0,vg:1.02,qmin:-30,qmax:30,xd2:0.15,H:5.0,D:2.0},{id:"G2",bus:2,pg:25,vg:1.01,qmin:-20,qmax:20,xd2:0.18,H:4.0,D:2.0}],
+  breakers:[{id:"CB-3",bus:3,rated_kv:12,rated_break_kA:20,rated_make_kA:50,relay_pickup_A:200,relay_curve:"VI",relay_dial:0.1,relay_inst_A:3000,breaker_time_s:0.05},
+            {id:"CB-1",bus:1,rated_kv:12,rated_break_kA:5,rated_make_kA:12,relay_pickup_A:400,relay_curve:"VI",relay_dial:0.4,relay_inst_A:0,breaker_time_s:0.05}],
+  _layout:[{id:1,x:250,y:200,label:"Bus 1"},{id:2,x:650,y:200,label:"Bus 2"},{id:3,x:450,y:420,label:"Bus 3"}]};
+render();
+renderDashboardTab();
+</script>
+</body>
+</html>
